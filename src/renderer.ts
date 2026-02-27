@@ -16,7 +16,7 @@
 
 import { NOTE_RGB } from './colors.js';
 
-const ENERGY_THRESHOLD = 0.15;
+const ENERGY_THRESHOLD = 0.30;
 const BASE_RADIUS_FACTOR = 0.82;   // blob radius as fraction of min(W,H)
 const ORBIT_RADIUS_FACTOR = 0.42;  // anchor distance from center as fraction of min(W,H)
 const FADE_ALPHA = 0.07;           // black overlay per frame — lower = longer color persistence

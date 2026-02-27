@@ -34,15 +34,18 @@ export async function initAudio(audioContext: AudioContext): Promise<void> {
  * Index 0 = C, 1 = C#, ..., 11 = B.
  */
 export function getPitchClassEnergies(): number[] {
-  const energies = new Array<number>(12).fill(0);
-  const counts = new Array<number>(12).fill(0);
+  const zeros = new Array<number>(12).fill(0);
 
-  if (!analyser || !dataArray) return energies;
+  if (!analyser || !dataArray) return zeros;
 
   analyser.getByteFrequencyData(dataArray);
 
   const binCount = analyser.frequencyBinCount;
   const nyquist = sampleRate / 2;
+
+  // Accumulate bin amplitudes into per-pitch-class sums
+  const sums = new Array<number>(12).fill(0);
+  const counts = new Array<number>(12).fill(0);
 
   for (let i = 1; i < binCount; i++) {
     const freq = (i / binCount) * nyquist;
@@ -55,28 +58,29 @@ export function getPitchClassEnergies(): number[] {
     // A4 = 9 semitones above C4, so C = semitone 0 when we offset by 9
     const pc = ((Math.round(semitones) + 9) % 12 + 12) % 12;
 
-    energies[pc] += dataArray[i];
+    sums[pc] += dataArray[i];
     counts[pc] += 1;
   }
 
-  const SILENCE_FLOOR = 0.08;
-  const CONTRAST = 2.0;
+  const MIN_AMPLITUDE = 30; // raw 0–255; raise if still too sensitive, lower if too deaf
+  const CONTRAST = 3.0;
 
   // Step 1: average raw amplitudes per pitch class
   const avg = new Array<number>(12).fill(0);
   for (let i = 0; i < 12; i++) {
-    avg[i] = counts[i] > 0 ? energies[i] / counts[i] : 0;
+    avg[i] = counts[i] > 0 ? sums[i] / counts[i] : 0;
   }
 
   // Step 2: find loudest pitch class this frame
   const max = Math.max(...avg);
 
-  // Step 3: silence gate — if nothing is loud enough, return zeros
-  if (max < SILENCE_FLOOR * 255) {
-    return energies; // already all zeros
+  // Step 3: volume gate — silence if loudest pitch class is below threshold
+  if (max < MIN_AMPLITUDE) {
+    return zeros;
   }
 
   // Step 4–5: relative normalization + contrast curve
+  const energies = new Array<number>(12).fill(0);
   for (let i = 0; i < 12; i++) {
     const norm = avg[i] / max;        // loudest note = 1.0
     energies[i] = norm ** CONTRAST;   // power curve crushes low values
